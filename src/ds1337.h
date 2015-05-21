@@ -10,6 +10,4 @@
 
 #include <i2cmaster.h>
 
-i hope this build fails
-
 #endif /* DS1337_H_ */
