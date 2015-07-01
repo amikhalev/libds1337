@@ -1,31 +1,83 @@
-# Filename: Makefile
-# Author: 	Alex Mikhalev
-# Date:		May 20, 2015
+# Filename:	Makefile
+# Author:   Alex Mikhalev
+# Date:     June 29, 2015
 
-CC 			:= avr-gcc
-AR 			:= avr-ar
-CPUFLAGS	:=-mmcu=atmega16 -DF_CPU=1000000UL
-CFLAGS		=-Wall -Os -fpack-struct -fshort-enums -ffunction-sections -fdata-sections -std=gnu99 -funsigned-char -funsigned-bitfields ${CPUFLAGS} -I ${SRC_DIR}
+# General configuration
+NAME		:= libds1337
+MCU			:= atmega328p
+F_CPU		:= 16000000UL
 
-SRC_DIR		:= ./src
-BUILD_DIR 	:= ./build
+# Directories and files
+SRC_DIR     := src
+LIB_DIR		:= lib
+BUILD_DIR   := build
 
-SRCS 		:= $(wildcard ${SRC_DIR}/*.c)
-OBJS		:= $(subst ${SRC_DIR}/,${BUILD_DIR}/,${SRCS:.c=.o})
-OUTPUT_LIB	:= ${BUILD_DIR}/libds1337.a
+SRCS        := $(wildcard $(SRC_DIR)/*.c)
+OBJS        := $(subst $(SRC_DIR)/,$(BUILD_DIR)/,$(SRCS:.c=.o))
+DEPS		:= $(subst $(SRC_DIR)/,$(BUILD_DIR)/,$(SRCS:.c=.d))
+OUTPUT_LIB  := $(BUILD_DIR)/$(NAME).a
+OUTPUT_LSS  := $(BUILD_DIR)/$(NAME).lss
 
-.PHONY: all
+# Tool configs
+CC          := avr-gcc
+AR          := avr-ar
+OBJDUMP		:= avr-objdump
+OBJCOPY		:= avr-objcopy
+RM			:= rm -rf
+LIBS		:=
+INCLUDES	:=-I $(SRC_DIR)
+CFLAGS      =-Wall -Os -fpack-struct -fshort-enums -ffunction-sections -fdata-sections -std=gnu99 -funsigned-char -funsigned-bitfields
+CFLAGS		+= -mmcu=$(MCU) -DF_CPU=$(F_CPU)
+CFLAGS		+= $(INCLUDES)
 
-all: ${OUTPUT_LIB}
+# Libraries
+
+.PHONY: all disassemble clean size
+.DEFAULT_GOAL := all
+
+# GCC generated dependencies
+-include $(DEPS)
+
+# Phony targets
+all: $(OUTPUT_LIB) disassemble
+	
+disassemble: $(OUTPUT_LSS)
 
 clean:
-	rm ${OBJS} ${OUTPUT_LIB}
+	@echo  
+	@echo === Removing "$(BUILD_DIR)" and all subdirectories ====
+	@echo  
+	$(RM) $(BUILD_DIR)
+	$(foreach subdir,$(SUBDIRS),$(MAKE) -C $(subdir) clean)
+	
+size: $(OUTPUT_ELF)
+	@echo  
+	@echo === Printing output size ====
+	@echo  
+	avr-size --format=avr --mcu=$(MCU) $(OUTPUT_LIB)
 
-${BUILD_DIR}/%.o: ${SRC_DIR}/%.c ${BUILD_DIR}
-	${CC} ${CFLAGS} -c -o "$@" "$<"
+# File targets
+$(BUILD_DIR):
+	@echo  
+	@echo === Creating "$(BUILD_DIR)" directory ====
+	@echo  
+	mkdir $(BUILD_DIR)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@echo  
+	@echo === Compiling "$<" using "$(CC)" ====
+	@echo  
+	$(CC) $(CFLAGS) -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -c -o "$@" "$<"
+
+$(OUTPUT_LIB): $(OBJS) $(LIBS)
+	@echo  
+	@echo === Archiving objects to "$(OUTPUT_LIB)" ====
+	@echo  
+	$(AR) -r "$(OUTPUT_LIB)" $?
+
+$(OUTPUT_LSS): $(OUTPUT_ELF)
+	@echo  
+	@echo === Disassembling "$(OUTPUT_LIB)" to "$(OUTPUT_LSS)" ====
+	@echo  
+	$(OBJDUMP) -h -S $(OUTPUT_LIB) >"$(OUTPUT_LSS)"
 	
-${BUILD_DIR}:
-	mkdir ${BUILD_DIR}
-	
-${OUTPUT_LIB}: ${OBJS}
-	${AR} -r "${OUTPUT_LIB}" $(OBJS) $(LIBS)
