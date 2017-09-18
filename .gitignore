@@ -7,3 +7,6 @@
 /build
 *.o
 *.a
+
+# Editor files
+.vscode
